@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>🌻 Rasmi Mehendi Try-On 🌻</title>
+
+<!-- Fabric.js for canvas + object transforms -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+
+<style>
+  :root{
+    --accent:#ff9800;
+    --accent-dark:#e65100;
+    --card-bg: rgba(255,255,255,0.92);
+  }
+  body{
+    margin:0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: url("sunflower-bg.jpg.jpeg") no-repeat center center fixed;
+    background-size: cover;
+    color:#222;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  header{
+    padding:22px 18px 6px;
+    text-align:center;
+  }
+  h1{
+    margin:0;
+    font-size:28px;
+    color:var(--accent);
+    text-shadow:2px 2px 6px rgba(0,0,0,0.25);
+  }
+  .app {
+    display:flex;
+    gap:18px;
+    padding:18px;
+    justify-content:center;
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+
+  /* left column: canvas / preview */
+  .preview-card {
+    width:520px;
+    background:var(--card-bg);
+    padding:14px;
+    border-radius:16px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.12);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  #canvas-wrapper{
+    width:480px;
+    height:600px;
+    background:#fff;
+    border-radius:12px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.08);
+    position:relative;
+    overflow:hidden;
+  }
+
+  canvas { display:block; width:100%; height:100%; }
+
+  /* right column: controls */
+  .controls-card {
+    width:360px;
+    background:var(--card-bg);
+    padding:14px;
+    border-radius:16px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.12);
+  }
+
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .col { display:flex; flex-direction:column; gap:8px; }
+
+  label { font-weight:600; color:#444; font-size:14px; }
+  select, input[type="file"], button, input[type="range"], input[type="color"], input[type="text"] {
+    width:100%;
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px solid #e7e0d6;
+    background:#fff8e8;
+    box-sizing:border-box;
+    font-size:14px;
+  }
+
+  .small { font-size:12px; color:#666; }
+
+  .big-btn {
+    padding:10px 14px;
+    border-radius:12px;
+    background:linear-gradient(45deg,var(--accent),#ffd54a);
+    color:#222; font-weight:700; border:none; cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,0.12);
+  }
+  .big-btn.secondary{ background:linear-gradient(45deg,#fff,#ffe9c3); border:1px solid #ffdca8; }
+
+  .gallery {
+    display:flex; gap:8px;
+    overflow-x:auto; padding:8px; border-radius:10px; background:#fff;
+  }
+  .gallery img { height:72px; cursor:pointer; border-radius:8px; border:2px solid transparent; object-fit:contain; }
+  .gallery img:hover{ transform:scale(1.06); border-color:var(--accent); }
+
+  .sidebar {
+    margin-top:12px;
+    background:#fff;
+    border-radius:10px;
+    padding:10px;
+  }
+
+  @media (max-width:980px){
+    .app { flex-direction:column; align-items:center; }
+    .preview-card, .controls-card { width:92%; }
+    #canvas-wrapper { width:100%; height:60vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌻 Rasmi Mehendi Try-On 🌻</h1>
+  <div class="small">Choose a hand, pick a design, drag + adjust — download in HD</div>
+</header>
+
+<div class="app">
+  <!-- Preview Card -->
+  <div class="preview-card">
+    <div id="canvas-wrapper">
+      <canvas id="c"></canvas>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+      <button id="downloadBtn" class="big-btn">Download HD PNG</button>
+      <button id="resetAll" class="big-btn secondary">Reset</button>
+    </div>
+  </div>
+
+  <!-- Controls Card -->
+  <div class="controls-card">
+    <!-- Hand selection -->
+    <div class="row">
+      <div style="flex:1">
+        <label>Select Hand</label>
+        <select id="handSelect">
+          <option value="hand-left.png">Left Hand</option>
+          <option value="hand-right.png">Right Hand</option>
+          <option value="hand-both.png">Both Hands</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Hand upload and capture -->
+    <div class="row">
+      <div style="flex:1">
+        <label>Upload / Capture Hand</label>
+        <input type="file" id="handUpload" accept="image/*">
+      </div>
+      <div style="width:120px">
+        <button id="handCameraBtn" class="big-btn secondary">Open Camera</button>
+      </div>
+    </div>
+    <div class="small">If "Both Hands" selected use combined base image <i>hand-both.png</i>. You can upload your own base hand picture too.</div>
+
+    <hr style="margin:12px 0;border:none;border-top:1px dashed #eee"/>
+
+    <!-- Designs -->
+    <label>Designs (Upload or pick from gallery)</label>
+    <div class="row">
+      <div style="flex:1">
+        <input type="file" id="designUpload" accept="image/*">
+      </div>
+      <div style="width:120px">
+        <button id="designCameraBtn" class="big-btn secondary">Camera</button>
+      </div>
+    </div>
+
+    <!-- Gallery offline + online -->
+    <div style="margin-top:10px">
+      <label>Gallery</label>
+      <div class="gallery" id="gallery">
+        <!-- Replace these with your actual images in /gallery/ -->
+        <img src="gallery/design1.png.jpeg" alt="d1" data-src="gallery/design1.png.jpeg">
+        <img src="gallery/design2.png.jpeg" alt="d2" data-src="gallery/design2.png.jpeg">
+        <img src="gallery/design3.png.jpeg" alt="d3" data-src="gallery/design3.png.jpeg">
+        <img src="gallery/design4.png.jpeg" alt="d4" data-src="gallery/design4.png.jpeg">
+        <img src="gallery/design5.png.jpeg" alt="d4" data-src="gallery/design5.png.jpeg">
+        <img src="gallery/design6.png.jpeg" alt="d4" data-src="gallery/design6.png.jpeg">
+        <img src="gallery/design7.png.jpeg" alt="d4" data-src="gallery/design7.png.jpeg">
+       </div>
+    </div>
+
+    <hr style="margin:12px 0;border:none;border-top:1px dashed #eee"/>
+
+    <!-- Both-hands uploads (shown when Both selected) -->
+    <div id="bothUploads" style="display:none; margin-bottom:10px;">
+      <label>Upload Left-hand Design (Both)</label>
+      <input type="file" id="bothLeftUpload" accept="image/*">
+      <label style="margin-top:8px;">Upload Right-hand Design (Both)</label>
+      <input type="file" id="bothRightUpload" accept="image/*">
+      <div class="small">Each upload will be processed and become its own design layer (left/right).</div>
+    </div>
+
+    <hr style="margin:12px 0;border:none;border-top:1px dashed #eee"/>
+
+    <!-- Controls drawer open -->
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="openSettings" class="big-btn secondary">⚙ Settings</button>
+      <div class="small">Open sliders for selected design</div>
+    </div>
+
+    <div id="settings" class="sidebar" style="display:none;">
+      <div class="row">
+        <div style="flex:1">
+          <label>Selected Object</label>
+          <input id="selectedName" readonly>
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label>Scale</label>
+          <input type="range" id="scaleSlider" min="0.1" max="3" step="0.01" value="1">
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label>Rotate</label>
+          <input type="range" id="rotateSlider" min="-180" max="180" step="1" value="0">
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label>Opacity</label>
+          <input type="range" id="opacitySlider" min="0" max="1" step="0.01" value="0.85">
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label>Blend Mode</label>
+          <select id="blendSelect">
+            <option value="source-over">Normal</option>
+            <option value="multiply">Multiply</option>
+            <option value="overlay">Overlay</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <button id="bringForward" class="big-btn secondary">Bring Forward</button>
+        <button id="sendBack" class="big-btn secondary">Send Back</button>
+      </div>
+      <div style="margin-top:8px;">
+        <button id="deleteObj" class="big-btn" style="background:#ff6b6b">Delete Selected</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Hidden video elements for capture -->
+<video id="cameraVideo" autoplay playsinline style="display:none;"></video>
+
+<script>
+/* ------------------------
+  CONFIG - remove.bg key (you provided)
+  NOTE: for a production site, don't put keys in client code.
+-------------------------*/
+const REMOVE_BG_API_KEY = "DEKmaL5DpU8kE8eVy6cfM35A";
+
+/* ------------------------
+  Fabric.js canvas init
+-------------------------*/
+const canvas = new fabric.Canvas('c', {
+  backgroundColor: '#ffffff',
+  preserveObjectStacking: true,
+  selection: true
+});
+
+function fitCanvas() {
+  const wrapper = document.getElementById('canvas-wrapper');
+  const rect = wrapper.getBoundingClientRect();
+  // Set canvas size in device pixels to avoid blurriness
+  const ratio = window.devicePixelRatio || 1;
+  canvas.setWidth(rect.width);
+  canvas.setHeight(rect.height);
+  canvas.calcOffset();
+}
+fitCanvas();
+window.addEventListener('resize', fitCanvas);
+
+/* stores */
+let leftDesignObj = null;
+let rightDesignObj = null;
+let baseHandImage = null;
+
+/* Load base hand image (non-selectable) */
+async function setBaseHand(src) {
+  if (baseHandImage) {
+    try { canvas.remove(baseHandImage); } catch(e) {}
+    baseHandImage = null;
+  }
+  return new Promise((resolve, reject) => {
+    fabric.Image.fromURL(src, function(img) {
+      img.set({ selectable:false, evented:false, left: canvas.width/2, top: canvas.height/2, originX:'center', originY:'center' });
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height) * 0.98;
+      img.scale(scale);
+      canvas.add(img);
+      canvas.sendToBack(img);
+      baseHandImage = img;
+      canvas.requestRenderAll();
+      resolve(img);
+    }, { crossOrigin: 'anonymous' });
+  });
+}
+
+/* Start with left hand */
+setTimeout(()=>setBaseHand('hand-left.png'), 50);
+
+/* ------------------------
+  call remove.bg (multipart)
+-------------------------*/
+async function callRemoveBg(file) {
+  if(!REMOVE_BG_API_KEY || REMOVE_BG_API_KEY === 'YOUR_REMOVE_BG_API_KEY') {
+    throw new Error('Remove.bg API key not set.');
+  }
+  const form = new FormData();
+  form.append('image_file', file);
+  form.append('size', 'regular');
+
+  const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+    method: 'POST',
+    headers: { 'X-Api-Key': REMOVE_BG_API_KEY },
+    body: form
+  });
+
+  if(!res.ok) {
+    const text = await res.text();
+    throw new Error('remove.bg failed: ' + res.status + ' ' + text);
+  }
+  const blob = await res.blob();
+  return blob;
+}
+
+/* ------------------------
+  Clean mehndi: threshold to keep dark lines only
+-------------------------*/
+function cleanMehndiFromImage(img, threshold = 160) {
+  return new Promise((resolve) => {
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const cx = c.getContext('2d');
+    cx.drawImage(img, 0, 0, w, h);
+    const id = cx.getImageData(0,0,w,h);
+    const d = id.data;
+    for (let i=0;i<d.length;i+=4) {
+      const r=d[i], g=d[i+1], b=d[i+2];
+      const avg = (r+g+b)/3;
+      // wipe bright = skin/background, keep darker mehndi
+      if (avg > threshold || (r<30 && g<30 && b<30)) {
+        d[i+3] = 0;
+      } else {
+        d[i+3] = 255;
+      }
+    }
+    cx.putImageData(id,0,0);
+    resolve(c.toDataURL('image/png'));
+  });
+}
+
+/* Add cleaned design to canvas */
+function addDesignToCanvas(dataUrl, options={}) {
+  const { role } = options;
+  fabric.Image.fromURL(dataUrl, function(img) {
+    const scale = Math.min((canvas.width*0.35)/img.width, (canvas.height*0.35)/img.height);
+    img.set({
+      left: canvas.width/2,
+      top: canvas.height/2,
+      originX:'center',
+      originY:'center',
+      selectable:true,
+      hasControls:true,
+      objectCaching:false,
+      scaleX: scale,
+      scaleY: scale,
+      opacity: 0.85,
+      globalCompositeOperation: 'multiply'
+    });
+    if(role === 'left') { img.meRole = 'left'; leftDesignObj = img; }
+    if(role === 'right') { img.meRole = 'right'; rightDesignObj = img; }
+    canvas.add(img).setActiveObject(img);
+    canvas.requestRenderAll();
+  }, { crossOrigin: 'anonymous' });
+}
+
+/* Process uploaded design: remove.bg -> clean -> add */
+async function processDesignFile(file, role) {
+  try {
+    const blob = await callRemoveBg(file);
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = async () => {
+      const cleanedDataUrl = await cleanMehndiFromImage(img, 160);
+      addDesignToCanvas(cleanedDataUrl, { role });
+      URL.revokeObjectURL(url);
+    };
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+  } catch (err) {
+    console.error(err);
+    alert('Background removal failed: ' + err.message + '\nAdding raw image as fallback.');
+    // fallback: show raw
+    const reader = new FileReader();
+    reader.onload = (e) => addDesignToCanvas(e.target.result, { role });
+    reader.readAsDataURL(file);
+  }
+}
+
+/* ------------------------
+  UI Events
+-------------------------*/
+document.getElementById('handSelect').addEventListener('change', (ev) => {
+  const val = ev.target.value;
+  document.getElementById('bothUploads').style.display = (val === 'hand-both.png') ? 'block' : 'none';
+  setBaseHand(val);
+});
+
+document.getElementById('handUpload').addEventListener('change', (ev) => {
+  const f = ev.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = function(e) { setBaseHand(e.target.result); };
+  reader.readAsDataURL(f);
+});
+
+document.getElementById('designUpload').addEventListener('change', (ev) => {
+  const f = ev.target.files[0]; if(!f) return;
+  processDesignFile(f, null);
+});
+document.getElementById('bothLeftUpload').addEventListener('change', (ev)=> {
+  const f = ev.target.files[0]; if(!f) return; processDesignFile(f, 'left');
+});
+document.getElementById('bothRightUpload').addEventListener('change', (ev)=> {
+  const f = ev.target.files[0]; if(!f) return; processDesignFile(f, 'right');
+});
+
+/* Gallery click adds design */
+document.getElementById('gallery').addEventListener('click', (ev) => {
+  const t = ev.target;
+  if(t && t.tagName === 'IMG') {
+    const src = t.dataset.src || t.src;
+    // Add gallery design directly (assume transparent PNG or already okay)
+    addDesignToCanvas(src, {});
+  }
+});
+
+/* Camera capture (hand or design) */
+let cameraStream = null;
+const cameraVideo = document.getElementById('cameraVideo');
+
+async function openCameraAndCaptureFor(target) {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+    cameraVideo.srcObject = cameraStream;
+    cameraVideo.play();
+    const ok = confirm('Camera started. Position the item and press OK to capture.');
+    if(!ok) { cameraStream.getTracks().forEach(t=>t.stop()); cameraVideo.srcObject = null; return; }
+    const temp = document.createElement('canvas');
+    temp.width = cameraVideo.videoWidth || 640;
+    temp.height = cameraVideo.videoHeight || 480;
+    temp.getContext('2d').drawImage(cameraVideo, 0, 0, temp.width, temp.height);
+    const dataUrl = temp.toDataURL('image/png');
+    cameraStream.getTracks().forEach(t=>t.stop());
+    cameraVideo.srcObject = null;
+    if(target === 'hand') {
+      setBaseHand(dataUrl);
+    } else {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      processDesignFile(new File([blob], 'capture.png', { type:'image/png' }), null);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Camera error: ' + err.message);
+  }
+}
+document.getElementById('handCameraBtn').addEventListener('click', ()=> openCameraAndCaptureFor('hand'));
+document.getElementById('designCameraBtn').addEventListener('click', ()=> openCameraAndCaptureFor('design'));
+
+/*  Settings panel toggle */
+document.getElementById('openSettings').addEventListener('click', () => {
+  const s = document.getElementById('settings');
+  s.style.display = s.style.display === 'none' ? 'block' : 'none';
+});
+
+/* Selection syncing */
+canvas.on('selection:created', syncSelectionToUI);
+canvas.on('selection:updated', syncSelectionToUI);
+canvas.on('selection:cleared', syncSelectionToUI);
+
+function syncSelectionToUI() {
+  const obj = canvas.getActiveObject();
+  const nameInput = document.getElementById('selectedName');
+  if(!obj) {
+    nameInput.value = '';
+    return;
+  }
+  nameInput.value = obj.meRole ? obj.meRole : (obj.type || 'design');
+  document.getElementById('scaleSlider').value = obj.scaleX || 1;
+  document.getElementById('rotateSlider').value = obj.angle || 0;
+  document.getElementById('opacitySlider').value = obj.opacity || 1;
+  document.getElementById('blendSelect').value = obj.globalCompositeOperation || 'source-over';
+}
+
+/* Sliders -> apply to selected object */
+document.getElementById('scaleSlider').addEventListener('input', (e)=> {
+  const obj = canvas.getActiveObject(); if(!obj) return;
+  const v = parseFloat(e.target.value);
+  obj.scaleX = v; obj.scaleY = v; canvas.requestRenderAll();
+});
+document.getElementById('rotateSlider').addEventListener('input', (e)=> {
+  const obj = canvas.getActiveObject(); if(!obj) return;
+  obj.angle = parseFloat(e.target.value); canvas.requestRenderAll();
+});
+document.getElementById('opacitySlider').addEventListener('input', (e)=> {
+  const obj = canvas.getActiveObject(); if(!obj) return;
+  obj.opacity = parseFloat(e.target.value); canvas.requestRenderAll();
+});
+document.getElementById('blendSelect').addEventListener('change', (e)=> {
+  const obj = canvas.getActiveObject(); if(!obj) return;
+  obj.globalCompositeOperation = e.target.value; canvas.requestRenderAll();
+});
+
+document.getElementById('bringForward').addEventListener('click', ()=> { const obj = canvas.getActiveObject(); if(!obj) return; canvas.bringForward(obj); canvas.requestRenderAll(); });
+document.getElementById('sendBack').addEventListener('click', ()=> { const obj = canvas.getActiveObject(); if(!obj) return; canvas.sendBackwards(obj); canvas.requestRenderAll(); });
+document.getElementById('deleteObj').addEventListener('click', ()=> { const obj = canvas.getActiveObject(); if(!obj) return; canvas.remove(obj); canvas.requestRenderAll(); });
+
+/* Touch pinch handling (basic) */
+let initialDist = null, initialAngle = null;
+const canvasEl = canvas.upperCanvasEl;
+canvasEl.addEventListener('touchstart', function(e){
+  if(e.touches.length === 2) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    initialDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    initialAngle = Math.atan2(t1.clientY - t0.clientY, t1.clientX - t0.clientX) * 180/Math.PI;
+    const obj = canvas.getActiveObject();
+    if(obj) { obj._initialScaleX = obj.scaleX || 1; obj._initialScaleY = obj.scaleY || 1; obj._initialAngle = obj.angle || 0; }
+  }
+});
+canvasEl.addEventListener('touchmove', function(e){
+  if(e.touches.length === 2 && initialDist) {
+    e.preventDefault();
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const curDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    const scaleFactor = curDist / initialDist;
+    const curAngle = Math.atan2(t1.clientY - t0.clientY, t1.clientX - t0.clientX) * 180/Math.PI;
+    const angleDiff = curAngle - initialAngle;
+    const obj = canvas.getActiveObject();
+    if(obj) {
+      obj.scaleX = (obj._initialScaleX || obj.scaleX || 1) * scaleFactor;
+      obj.scaleY = (obj._initialScaleY || obj.scaleY || 1) * scaleFactor;
+      obj.angle = (obj._initialAngle || obj.angle || 0) + angleDiff;
+      canvas.requestRenderAll();
+    }
+  }
+});
+canvasEl.addEventListener('touchend', function(e){ initialDist = null; initialAngle = null; });
+
+/* Reset: remove designs but keep base hand */
+document.getElementById('resetAll').addEventListener('click', ()=> {
+  canvas.getObjects().slice().forEach(o => { if(o !== baseHandImage) canvas.remove(o); });
+  leftDesignObj = rightDesignObj = null;
+  canvas.requestRenderAll();
+});
+
+/* Download HD PNG */
+document.getElementById('downloadBtn').addEventListener('click', async ()=> {
+  // Render at multiplier for HD
+  const multiplier = 2;
+  const dataUrl = canvas.toDataURL({ format:'png', multiplier });
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = 'rasmi-mehndi-preview.png';
+  a.click();
+});
+
+/* Keep canvas fitted whenever DOM layout changes */
+new ResizeObserver(() => { fitCanvas(); }).observe(document.getElementById('canvas-wrapper'));
+</script>
+</body>
+</html>
